@@ -11,20 +11,38 @@ const pages = [
 ];
 const extras = [{ id: 'billing', name: 'Billing / Credits', icon: CreditCard }, { id: 'settings', name: 'Profile settings', icon: Settings2 }, { id: 'preferences', name: 'Preferences', icon: SlidersHorizontal }];
 const getPage = () => [...pages, ...extras].find(p => p.id === location.hash.slice(1)) || pages[0];
-// Fixed coordinates keep the sky stable across page changes and sidebar toggles.
-const stars = Array.from({ length: 220 }, (_, i) => ({
-  left: `${((i * 613 + 17) % 997) / 10}%`,
-  top: `${((i * 317 + 43) % 991) / 10}%`,
-  '--star-size': `${i % 11 === 0 ? 3 : i % 3 === 0 ? 2 : 1.2}px`,
-  '--star-opacity': 0.4 + (i % 5) * 0.14,
-  '--star-color': ['#e9dcff', '#8ddcff', '#ffb5df', '#ffe0a0', '#b4b9ff'][i % 5],
-  '--twinkle-duration': `${4 + i % 7}s`,
-  animationDelay: `${-(i % 11)}s`,
-}));
+// Independent seeded samples avoid rows and keep the sky stable on re-render.
+function createStars(count, seed) {
+  const random = () => {
+    seed |= 0;
+    seed = (seed + 0x6D2B79F5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+  const colors = ['#fffaf0', '#f4f7ff', '#fff0d7', '#e0ebff', '#ffffff'];
+  return Array.from({ length: count }, () => {
+    const bright = random() > 0.93;
+    return {
+      bright,
+      style: {
+        left: `${random() * 100}%`,
+        top: `${random() * 100}%`,
+        '--star-size': `${bright ? 1.8 + random() * 1.1 : 0.65 + random() * 1.25}px`,
+        '--star-opacity': bright ? 0.75 + random() * 0.25 : 0.2 + random() * 0.65,
+        '--star-color': colors[Math.floor(random() * colors.length)],
+        '--twinkle-duration': `${3.5 + random() * 8}s`,
+        animationDelay: `${-random() * 14}s`,
+      },
+    };
+  });
+}
+const stars = createStars(220, 72819);
+const sidebarStars = createStars(70, 39127);
 function Starfield({ sidebar = false }) {
   return <div className={`cosmic-background ${sidebar ? 'sidebar-sky' : ''}`} aria-hidden="true">
     <div className="nebula nebula-violet"/><div className="nebula nebula-blue"/><div className="nebula nebula-rose"/>
-    <div className="starfield">{(sidebar ? stars.slice(35, 105) : stars).map((style, i) => <span key={i} className={`star ${i % 9 === 0 ? 'star-bright' : ''}`} style={style}/>)}</div>
+    <div className="starfield">{(sidebar ? sidebarStars : stars).map(({ style, bright }, i) => <span key={i} className={`star ${bright ? 'star-bright' : ''}`} style={style}/>)}</div>
     <div className="shooting-star shooting-star-one"/><div className="shooting-star shooting-star-two"/><div className="shooting-star shooting-star-three"/>
   </div>;
 }
