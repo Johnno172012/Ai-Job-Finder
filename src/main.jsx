@@ -12,18 +12,19 @@ const pages = [
 const extras = [{ id: 'billing', name: 'Billing / Credits', icon: CreditCard }, { id: 'settings', name: 'Profile settings', icon: Settings2 }, { id: 'preferences', name: 'Preferences', icon: SlidersHorizontal }];
 const getPage = () => [...pages, ...extras].find(p => p.id === location.hash.slice(1)) || pages[0];
 // Fixed coordinates keep the sky stable across page changes and sidebar toggles.
-const stars = Array.from({ length: 84 }, (_, i) => ({
-  left: `${((i * 61 + 17) % 997) / 10}%`,
-  top: `${((i * 137 + 43) % 991) / 10}%`,
-  '--star-size': `${i % 9 === 0 ? 2.5 : i % 3 === 0 ? 1.8 : 1}px`,
-  '--star-opacity': 0.22 + (i % 5) * 0.12,
+const stars = Array.from({ length: 220 }, (_, i) => ({
+  left: `${((i * 613 + 17) % 997) / 10}%`,
+  top: `${((i * 317 + 43) % 991) / 10}%`,
+  '--star-size': `${i % 11 === 0 ? 3 : i % 3 === 0 ? 2 : 1.2}px`,
+  '--star-opacity': 0.4 + (i % 5) * 0.14,
+  '--star-color': ['#e9dcff', '#8ddcff', '#ffb5df', '#ffe0a0', '#b4b9ff'][i % 5],
   '--twinkle-duration': `${4 + i % 7}s`,
   animationDelay: `${-(i % 11)}s`,
 }));
-function Starfield() {
-  return <div className="cosmic-background" aria-hidden="true">
-    <div className="nebula nebula-violet"/><div className="nebula nebula-blue"/>
-    <div className="starfield">{stars.map((style, i) => <span key={i} className={`star ${i % 13 === 0 ? 'star-bright' : ''}`} style={style}/>)}</div>
+function Starfield({ sidebar = false }) {
+  return <div className={`cosmic-background ${sidebar ? 'sidebar-sky' : ''}`} aria-hidden="true">
+    <div className="nebula nebula-violet"/><div className="nebula nebula-blue"/><div className="nebula nebula-rose"/>
+    <div className="starfield">{(sidebar ? stars.slice(35, 105) : stars).map((style, i) => <span key={i} className={`star ${i % 9 === 0 ? 'star-bright' : ''}`} style={style}/>)}</div>
     <div className="shooting-star shooting-star-one"/><div className="shooting-star shooting-star-two"/><div className="shooting-star shooting-star-three"/>
   </div>;
 }
@@ -40,7 +41,7 @@ function App() {
   const navLink = p => <a key={p.id} href={`#${p.id}`} className={`nav-link ${page.id === p.id ? 'active' : ''}`} aria-current={page.id === p.id ? 'page' : undefined} data-tooltip={p.name} onClick={() => { setMobileOpen(false); setAccountOpen(false); }}><p.icon size={19}/><span className="nav-label">{p.name}</span>{page.id === p.id && <span className="active-dot"/>}</a>;
   return <div className={`app ${collapsed ? 'is-collapsed' : ''}`}>
     {mobileOpen && <button className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-label="Close navigation"/>}
-    <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Main navigation">
+    <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Main navigation"><Starfield sidebar/>
       <div className="brand-row"><a className="brand" href="#jobs" aria-label="JobBuddy AI home"><span className="brand-symbol"><BriefcaseBusiness size={20} strokeWidth={1.8}/><span className="brand-spark">✦</span></span><span className="brand-name">JobBuddy <span>AI</span></span></a><button className="mobile-close icon-button" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={18}/></button></div>
       <button className="workspace" data-tooltip="Personal workspace" onClick={() => navigate('profile')}><span className="workspace-avatar">J<span/></span><span className="workspace-label"><strong>My workspace</strong><small>Personal account</small></span><ChevronDown size={14} className="workspace-chevron"/></button>
       <div className="nav-section"><div className="section-label">WORKSPACE</div><nav>{pages.map(navLink)}</nav></div>
