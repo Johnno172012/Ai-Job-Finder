@@ -11,6 +11,22 @@ const pages = [
 ];
 const extras = [{ id: 'billing', name: 'Billing / Credits', icon: CreditCard }, { id: 'settings', name: 'Profile settings', icon: Settings2 }, { id: 'preferences', name: 'Preferences', icon: SlidersHorizontal }];
 const getPage = () => [...pages, ...extras].find(p => p.id === location.hash.slice(1)) || pages[0];
+// Fixed coordinates keep the sky stable across page changes and sidebar toggles.
+const stars = Array.from({ length: 84 }, (_, i) => ({
+  left: `${((i * 61 + 17) % 997) / 10}%`,
+  top: `${((i * 137 + 43) % 991) / 10}%`,
+  '--star-size': `${i % 9 === 0 ? 2.5 : i % 3 === 0 ? 1.8 : 1}px`,
+  '--star-opacity': 0.22 + (i % 5) * 0.12,
+  '--twinkle-duration': `${4 + i % 7}s`,
+  animationDelay: `${-(i % 11)}s`,
+}));
+function Starfield() {
+  return <div className="cosmic-background" aria-hidden="true">
+    <div className="nebula nebula-violet"/><div className="nebula nebula-blue"/>
+    <div className="starfield">{stars.map((style, i) => <span key={i} className={`star ${i % 13 === 0 ? 'star-bright' : ''}`} style={style}/>)}</div>
+    <div className="shooting-star shooting-star-one"/><div className="shooting-star shooting-star-two"/><div className="shooting-star shooting-star-three"/>
+  </div>;
+}
 function App() {
   const [page, setPage] = useState(getPage);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('jobbuddy-sidebar') === 'collapsed');
@@ -38,7 +54,7 @@ function App() {
       </div>
       <div className="sidebar-collapse"><button onClick={toggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} data-tooltip={collapsed ? 'Expand sidebar' : undefined}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}<span>Collapse sidebar</span><span className="collapse-shortcut">‹</span></button></div>
     </aside>
-    <div className="main-shell"><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" key={page.id} aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><div className="blank-page" aria-hidden="true"/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
+    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" key={page.id} aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><div className="blank-page" aria-hidden="true"/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
   </div>;
 }
 
