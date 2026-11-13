@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BriefcaseBusiness, FileText, UserRound, Layers, PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight, CreditCard, Sparkles, ArrowUpRight, Settings2, SlidersHorizontal, Menu, X, Check } from 'lucide-react';
 import './styles.css';
+import { Workspace } from './workspace.jsx';
 
 const pages = [
   { id: 'jobs', name: 'Jobs', icon: BriefcaseBusiness },
@@ -64,7 +65,7 @@ function App() {
       <button className="workspace" data-tooltip="Personal workspace" onClick={() => navigate('profile')}><span className="workspace-avatar">J<span/></span><span className="workspace-label"><strong>My workspace</strong><small>Personal account</small></span><ChevronDown size={14} className="workspace-chevron"/></button>
       <div className="nav-section"><div className="section-label">WORKSPACE</div><nav>{pages.map(navLink)}</nav></div>
       <div className="sidebar-bottom">
-        <div className="credit-card" data-tooltip="Credits: not connected"><div className="credit-heading"><span className="credit-icon"><Sparkles size={15}/></span><span className="credit-title">Your credits</span><span className="plan-label">FREE</span></div><div className="credit-balance"><strong>—</strong><span>credits available</span></div><div className="credit-meter"><span/></div><div className="credit-note">Your balance will appear here</div><button className="upgrade-button" onClick={() => navigate('billing')}><span>Manage credits</span><ArrowUpRight size={15}/></button></div>
+        <div className="credit-card" data-tooltip="Free workspace"><div className="credit-heading"><span className="credit-icon"><Sparkles size={15}/></span><span className="credit-title">Your credits</span><span className="plan-label">FREE</span></div><div className="credit-balance"><strong>0</strong><span>credits required</span></div><div className="credit-meter"><span/></div><div className="credit-note">Workspace features are free</div><button className="upgrade-button" onClick={() => navigate('billing')}><span>View plan</span><ArrowUpRight size={15}/></button></div>
         <nav className="footer-nav">{navLink(extras[0])}</nav>
         <div className="account-area">
           {accountOpen && <><button className="menu-dismiss" aria-label="Close account menu" onClick={() => setAccountOpen(false)}/><div className="account-menu"><div className="menu-heading">MY ACCOUNT</div><button onClick={() => navigate('settings')}><Settings2 size={16}/>Profile settings<ChevronRight size={14}/></button><button onClick={() => navigate('preferences')}><SlidersHorizontal size={16}/>Preferences<ChevronRight size={14}/></button><div className="menu-plan"><span><span className="status-dot"/>Personal workspace</span><Check size={14}/></div></div></>}
@@ -73,7 +74,7 @@ function App() {
       </div>
       <div className="sidebar-collapse"><button onClick={toggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} data-tooltip={collapsed ? 'Expand sidebar' : undefined}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}<span>Collapse sidebar</span><span className="collapse-shortcut">‹</span></button></div>
     </aside>
-    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" key={page.id} aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><div className="blank-page" aria-hidden="true"/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
+    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><Workspace page={page.id}/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
   </div>;
 }
 
