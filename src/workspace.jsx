@@ -253,10 +253,14 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     }
   }, [page, searchTerms]);
 
-  function track(job, status) {
+  function isBookmarked(job) {
+    return job?.bookmarked ?? job?.status === 'Saved';
+  }
+
+  function track(job, status, bookmarked = isBookmarked(job)) {
     attempt(async () => {
       const next = { ...applications };
-      if (status) next[job.id] = { ...job, status };
+      if (status) next[job.id] = { ...job, status, bookmarked };
       else delete next[job.id];
       await saveApplications(next);
     }, status ? 'Application updated.' : 'Removed from tracker.');
@@ -337,7 +341,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       </form>
     </Panel></div>;
   } else if (page === 'applications' || page === 'saved') {
-    const entries = Object.values(applications).filter(job => page !== 'saved' || job.status === 'Saved');
+    const entries = Object.values(applications).filter(job => page !== 'saved' || isBookmarked(job));
     content = <Panel title={page === 'saved' ? 'Saved listings' : 'Application tracker'}>
       {!entries.length && <p>Save a job from <a href="#jobs">Jobs</a> to start tracking it.</p>}
       {entries.map(job => <article className="job-row" key={job.id}>
@@ -347,7 +351,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
             {statuses.map(status => <option key={status}>{status}</option>)}
           </select>
           <a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Open <ExternalLink size={14}/></a>
-          <button className="feature-button secondary" aria-label={'Remove ' + job.title} onClick={() => track(job, '')}><Trash2 size={15}/></button>
+          <button className="feature-button secondary" aria-label={'Remove ' + job.title} onClick={() => track(job, page === 'saved' && job.status !== 'Saved' ? job.status : '', false)}><Trash2 size={15}/></button>
         </div>
       </article>)}
     </Panel>;
@@ -409,7 +413,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
             </>}
           </div>
           <div className="feature-actions job-result-actions"><a className="feature-button" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply now <ExternalLink size={14}/></a>
-            {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
+            {isBookmarked(applications[job.id]) ? <a className="feature-button secondary" href="#saved">Saved</a> : <button className="feature-button secondary" onClick={() => track(job, applications[job.id]?.status ?? 'Saved', true)}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
         {lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
           <button className="feature-button secondary" disabled={currentPage === 0} onClick={() => setJobPage(currentPage - 1)}>Previous</button>
