@@ -1,3 +1,4 @@
+import { createJobMatcher } from './job-match.js';
 import { cloud } from './cloud.jsx';
 import React, { Fragment, useEffect, useState } from 'react';
 import { Upload, Search, ExternalLink, Bookmark, Trash2 } from 'lucide-react';
@@ -110,10 +111,7 @@ function CompanyLogo({ company = '' }) {
     alt="" width="34" height="34" loading="lazy" onError={() => setFailedLogo(logo)}/>;
 }
 
-function keywords(text) {
-  const common = new Set('the and for with from you your our are will has have can this that work team years role job experience'.split(' '));
-  return new Set((text.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) ?? []).filter(word => !common.has(word)));
-}
+
 
 function resumeProfile(text) {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
@@ -170,7 +168,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     .filter(Boolean).join(' ').slice(0, 120);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const skillWords = keywords([resume.text, profile.skills, profile.role].filter(Boolean).join(' '));
+  const matchJob = createJobMatcher(resume, profile);
 
   async function attempt(action, success) {
     setError('');
@@ -358,8 +356,8 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   } else {
     const listings = remoteJobs;
     const matches = listings.filter(job => (!platform || job.source === platform) && (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
-      .map(job => ({ job, hits: [...keywords(job.title + ' ' + job.description)].filter(word => skillWords.has(word)).length }))
-      .sort((a, b) => b.hits - a.hits);
+      .map(job => ({ job, match: matchJob(job) }))
+      .sort((a, b) => (b.match.score ?? -1) - (a.match.score ?? -1) || b.match.matched.length - a.match.matched.length);
     const lastPage = Math.max(0, Math.ceil(matches.length / pageSize) - 1);
     const currentPage = Math.min(jobPage, lastPage);
     content = <div className="jobs-dashboard">
@@ -368,7 +366,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         <p>{matches.length ? `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
       </Panel>
       <Panel title="Top job matches">
-        <p>{skillWords.size ? 'Listings are ranked by shared words from your resume and profile.' : <>Add a <a href="#resume">resume</a> or <a href="#profile">career profile</a> to rank listings by keyword overlap.</>}</p>
+        <p>Ranked by how many skills mentioned in each listing appear in your resume and profile.</p>
         <h3>Job platforms</h3>
         <div className="job-platforms" aria-label="Filter by job platform">
           {platforms.map(source => <button key={source} type="button" className="job-platform"
@@ -393,9 +391,17 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
           <a className="feature-button secondary" href="#saved">Saved jobs</a>
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
-        {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, hits }) => <article className="job-row job-result" key={job.id}>
-          <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div></div>
-          <div className="feature-actions"><a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply on site <ExternalLink size={14}/></a>
+        {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, match }) => <article className="job-row job-result" key={job.id}>
+          <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p></div></div>
+          <div className="job-match">
+            {match.score === null ? <small>Not enough skill details</small> : <>
+              <strong>{match.score}% skill match</strong>
+              <progress value={match.score} max={100} aria-label="Skill match"/>
+              <small>{match.matched.length} of {match.total} recognized skills</small>
+              {match.matched.length > 0 && <small>{match.matched.slice(0, 3).join(' · ')}</small>}
+            </>}
+          </div>
+          <div className="feature-actions job-result-actions"><a className="feature-button" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply now <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
         {lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
