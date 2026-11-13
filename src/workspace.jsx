@@ -154,11 +154,10 @@ export function useResume(account) {
 export function Workspace({ page, resume, saveResume, locked, account }) {
   const [profile, saveProfile] = useStored('jobbuddy-profile', {}, account);
   const [applications, saveApplications] = useStored('jobbuddy-applications', {}, account);
-  const [platform, setPlatform] = useState('');
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [sourceStatus, setSourceStatus] = useState({});
   const [query, setQuery] = useState('');
   const [jobPage, setJobPage] = useState(0);
-  const [showAllJobs, setShowAllJobs] = useState(false);
   const [jobSource, setJobSource] = useState('');
   const [profileTab, setProfileTab] = useState('personal');
   const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
@@ -356,24 +355,27 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     content = <Panel title="Workspace plan"><p>This browser workspace is free. Resume import, keyword matching, and application tracking do not use credits.</p></Panel>;
   } else {
     const listings = remoteJobs;
-    const matches = listings.filter(job => (!platform || job.source === platform) && (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
+    const platformJobs = listings.filter(job => !selectedPlatforms.length || selectedPlatforms.includes(job.source));
+    const matches = platformJobs.filter(job => (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
       .map(job => ({ job, match: matchJob(job) }))
       .sort((a, b) => (b.match.score ?? -1) - (a.match.score ?? -1) || b.match.matched.length - a.match.matched.length);
     const lastPage = Math.max(0, Math.ceil(matches.length / pageSize) - 1);
     const currentPage = Math.min(jobPage, lastPage);
-    const visibleJobs = showAllJobs ? matches : matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    const visibleJobs = matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
     content = <div className="jobs-dashboard">
       <div className="jobs-results">
       <Panel title={profile.name?.trim() ? `Welcome, ${profile.name.trim().split(/\s+/)[0]}` : 'Welcome to Jobs'}>
-        <p>{matches.length ? showAllJobs ? `Showing all ${matches.length} matching listings.` : `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
+        <p>{matches.length ? `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
       </Panel>
       <Panel title="Top job matches">
         <p>Ranked by how many skills mentioned in each listing appear in your resume and profile.</p>
         <h3>Job platforms</h3>
         <div className="job-platforms" aria-label="Filter by job platform">
           {platforms.map(source => <button key={source} type="button" className="job-platform"
-            aria-pressed={platform === source} onClick={() => {
-              setPlatform(platform === source ? '' : source);
+            aria-pressed={selectedPlatforms.includes(source)} onClick={() => {
+              setSelectedPlatforms(previous => previous.includes(source)
+                ? previous.filter(item => item !== source)
+                : [...previous, source]);
               setJobSource('');
               setJobPage(0);
             }}>
@@ -388,13 +390,10 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         <div className="feature-actions">
           <label>Employer<select value={jobSource} onChange={event => { setJobSource(event.target.value); setJobPage(0); }}>
             <option value="">All employers</option>
-            {[...new Set(listings.filter(job => (!platform || job.source === platform) && job.company).map(job => job.company))].sort().map(company => <option key={company}>{company}</option>)}
+            {[...new Set(platformJobs.filter(job => job.company).map(job => job.company))].sort().map(company => <option key={company}>{company}</option>)}
           </select></label>
           <a className="feature-button secondary" href="#saved">Saved jobs</a>
-          {lastPage > 0 && <button type="button" className="feature-button secondary" aria-pressed={showAllJobs} onClick={() => {
-            setShowAllJobs(!showAllJobs);
-            setJobPage(0);
-          }}>Show all results</button>}
+
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
         {visibleJobs.map(({ job, match }) => <article className="job-row job-result" key={job.id}>
@@ -410,7 +409,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
           <div className="feature-actions job-result-actions"><a className="feature-button" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply now <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
-        {!showAllJobs && lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
+        {lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
           <button className="feature-button secondary" disabled={currentPage === 0} onClick={() => setJobPage(currentPage - 1)}>Previous</button>
           <span>Page {currentPage + 1} of {lastPage + 1}</span>
           <button className="feature-button secondary" disabled={currentPage === lastPage} onClick={() => setJobPage(currentPage + 1)}>Next</button>
