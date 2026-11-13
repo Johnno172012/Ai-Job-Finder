@@ -56,7 +56,7 @@ function Landing({ ready }) {
     </header>
     <main className="landing-main">
       <h1>Your job search, in one place.</h1>
-      <p>Upload your resume, find live Greenhouse listings, and track every application.</p>
+      <p>Upload your resume, find live job listings, and track every application.</p>
       <section className="landing-preview" aria-label="Example workspace">
         <div className="preview-bar"><span aria-hidden="true">● ● ●</span> Workspace / Jobs <small>Example</small></div>
         <div className="preview-grid">

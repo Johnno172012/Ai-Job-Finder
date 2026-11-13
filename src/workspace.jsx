@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import { Upload, Search, ExternalLink, Bookmark, Trash2 } from 'lucide-react';
 
 const statuses = ['Saved', 'Applied', 'Interviewing', 'Offer', 'Rejected', 'Withdrawn'];
@@ -49,6 +49,43 @@ function safeUrl(value) {
   } catch { return ''; }
 }
 
+const platforms = ['Greenhouse', 'Lever', 'Workable', 'Wellfound'];
+
+async function fetchJobs(source) {
+  async function get(url) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (response.status === 503 && url.startsWith('/api/')) throw Error('Requires Brave Search setup');
+    if (!response.ok) throw Error('Unavailable');
+    return response.json();
+  }
+
+  let jobs;
+  if (source === 'Greenhouse') {
+    const boards = [['cloudflare', 'Cloudflare'], ['figma', 'Figma'], ['stripe', 'Stripe']];
+    const results = await Promise.allSettled(boards.map(async ([board, company]) => {
+      const data = await get(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`);
+      return data.jobs.map(job => ({
+        id: `greenhouse-${board}-${job.id}`, title: job.title, company: job.company_name || company,
+        location: job.location?.name ?? '', url: job.absolute_url,
+        description: (job.content ?? '').replace(/&lt;[\s\S]*?&gt;|<[^>]*>/g, ' '),
+      }));
+    }));
+    if (results.every(result => result.status === 'rejected')) throw Error('Unavailable');
+    jobs = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+  } else if (source === 'Lever') {
+    const data = await get('https://api.lever.co/v0/postings/spotify?mode=json');
+    jobs = data.map(job => ({
+      id: `lever-spotify-${job.id}`, title: job.text, company: 'Spotify',
+      location: job.categories?.location ?? '', url: job.hostedUrl,
+      description: job.descriptionPlain ?? '',
+    }));
+  } else {
+    jobs = await get(`/api/job-search?source=${source}`);
+    if (!Array.isArray(jobs)) throw Error('Requires Brave Search setup');
+  }
+  return jobs.filter(job => safeUrl(job.url)).map(job => ({ ...job, source }));
+}
+
 function keywords(text) {
   const common = new Set('the and for with from you your our are will has have can this that work team years role job experience'.split(' '));
   return new Set((text.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) ?? []).filter(word => !common.has(word)));
@@ -94,8 +131,9 @@ export function useResume() {
 
 export function Workspace({ page, resume, saveResume, locked }) {
   const [profile, saveProfile] = useStored('jobbuddy-profile', {});
-  const [jobs, saveJobs] = useStored('jobbuddy-jobs', []);
   const [applications, saveApplications] = useStored('jobbuddy-applications', {});
+  const [platform, setPlatform] = useState('');
+  const [sourceStatus, setSourceStatus] = useState({});
   const [query, setQuery] = useState('');
   const [jobPage, setJobPage] = useState(0);
   const [jobSource, setJobSource] = useState('');
@@ -137,46 +175,22 @@ export function Workspace({ page, resume, saveResume, locked }) {
   async function discover() {
     setLoadingJobs(true);
     setError('');
-    setMessage('');
-    try {
-      const boards = [['cloudflare', 'Cloudflare'], ['figma', 'Figma'], ['stripe', 'Stripe']];
-      const results = await Promise.allSettled(boards.map(async ([board, company]) => {
-        const endpoint = `https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`;
-        const response = await fetch(endpoint, { signal: AbortSignal.timeout(12000) });
-        if (!response.ok) throw Error(company);
-        const { jobs } = await response.json();
-        return jobs.filter(job => safeUrl(job.absolute_url)).map(job => ({
-          id: `greenhouse-${board}-${job.id}`,
-          title: job.title,
-          company: job.company_name || company,
-          location: job.location?.name ?? '',
-          url: job.absolute_url,
-          description: (job.content ?? '').replace(/&lt;[\s\S]*?&gt;|<[^>]*>/g, ' '),
-        }));
-      }));
-      const available = results.filter(result => result.status === 'fulfilled');
-      if (!available.length) throw Error();
-      const listings = available.flatMap(result => result.value);
-      setRemoteJobs(listings);
-      setMessage(`Loaded ${listings.length} Greenhouse listings from ${available.length} of ${boards.length} employer boards.`);
-    } catch { setError('Greenhouse listings are unavailable. Try again or add a listing manually.'); }
-    finally { setLoadingJobs(false); }
+    const sources = platforms;
+    const results = await Promise.allSettled(sources.map(fetchJobs));
+    setSourceStatus(Object.fromEntries(sources.map((source, index) => {
+      const result = results[index];
+      return [source, result.status === 'fulfilled' ? `${result.value.length} listings` : result.reason.message];
+    })));
+    const refreshed = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+    const failed = new Set(sources.filter((_, index) => results[index].status === 'rejected'));
+    setRemoteJobs(previous => [...previous.filter(job => failed.has(job.source)), ...refreshed]);
+    setJobPage(0);
+    setLoadingJobs(false);
   }
 
-  function addJob(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const values = Object.fromEntries(new FormData(form));
-    values.url = safeUrl(values.url);
-    if (!values.title.trim() || !values.company.trim() || !values.url) {
-      setError('Enter a title, company, and valid application link.');
-      return;
-    }
-    attempt(() => {
-      saveJobs([{ ...values, id: crypto.randomUUID() }, ...jobs]);
-      form.reset();
-    }, 'Listing added.');
-  }
+  useEffect(() => {
+    if (page === 'jobs' && !Object.keys(sourceStatus).length && !loadingJobs) discover();
+  }, [page, sourceStatus, loadingJobs]);
 
   function track(job, status) {
     attempt(() => {
@@ -272,8 +286,8 @@ export function Workspace({ page, resume, saveResume, locked }) {
   } else if (page === 'billing') {
     content = <Panel title="Workspace plan"><p>This browser workspace is free. Resume import, keyword matching, and application tracking do not use credits.</p></Panel>;
   } else {
-    const listings = [...new Map([...Object.values(applications), ...remoteJobs, ...jobs].map(job => [job.id, job])).values()];
-    const matches = listings.filter(job => (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
+    const listings = remoteJobs;
+    const matches = listings.filter(job => (!platform || job.source === platform) && (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
       .map(job => ({ job, hits: [...keywords(job.title + ' ' + job.description)].filter(word => skillWords.has(word)).length }))
       .sort((a, b) => b.hits - a.hits);
     const lastPage = Math.max(0, Math.ceil(matches.length / pageSize) - 1);
@@ -282,24 +296,32 @@ export function Workspace({ page, resume, saveResume, locked }) {
       <div className="jobs-results">
       <Panel title="Top job matches">
         <p>{skillWords.size ? 'Listings are ranked by shared words from your resume and profile.' : <>Add a <a href="#resume">resume</a> or <a href="#profile">career profile</a> to rank listings by keyword overlap.</>}</p>
-        <div className="job-platform">
-          <span className="platform-mark" aria-hidden="true">G</span>
-          <span><strong>Greenhouse</strong><small>Job board</small></span>
+        <h3>Job platforms</h3>
+        <div className="job-platforms" aria-label="Filter by job platform">
+          {platforms.map(source => <button key={source} type="button" className="job-platform"
+            aria-pressed={platform === source} onClick={() => {
+              setPlatform(platform === source ? '' : source);
+              setJobSource('');
+              setJobPage(0);
+            }}>
+            <span className="platform-mark" aria-hidden="true">{source[0]}</span>
+            <span><strong>{source}</strong><small>{sourceStatus[source] ?? 'Job board'}</small></span>
+          </button>)}
         </div>
         <div className="feature-actions">
           <label className="search-field"><Search size={16}/><input aria-label="Filter jobs" placeholder="Filter by role, company, or location" value={query} onChange={event => { setQuery(event.target.value); setJobPage(0); }}/></label>
-          <button className="feature-button" onClick={discover} disabled={loadingJobs}>{loadingJobs ? 'Loading…' : 'Load Greenhouse jobs'}</button>
+          <button className="feature-button" onClick={discover} disabled={loadingJobs}>{loadingJobs ? 'Loading…' : 'Refresh jobs'}</button>
         </div>
         <div className="feature-actions">
           <label>Employer<select value={jobSource} onChange={event => { setJobSource(event.target.value); setJobPage(0); }}>
             <option value="">All employers</option>
-            {[...new Set(listings.map(job => job.company))].sort().map(company => <option key={company}>{company}</option>)}
+            {[...new Set(listings.filter(job => (!platform || job.source === platform) && job.company).map(job => job.company))].sort().map(company => <option key={company}>{company}</option>)}
           </select></label>
           <a className="feature-button secondary" href="#saved">Saved jobs</a>
         </div>
-        {!matches.length && <p>{listings.length ? 'No listings match your filter.' : 'Load live jobs or add a listing to get started.'}</p>}
+        {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
         {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, hits }) => <article className="job-row job-result" key={job.id}>
-          <div><h3>{job.title}</h3>{job.id.startsWith('greenhouse-') && <small>Greenhouse</small>}<p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div>
+          <div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div>
           <div className="feature-actions"><a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply on site <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
@@ -308,18 +330,6 @@ export function Workspace({ page, resume, saveResume, locked }) {
           <span>Page {currentPage + 1} of {lastPage + 1}</span>
           <button className="feature-button secondary" disabled={currentPage === lastPage} onClick={() => setJobPage(currentPage + 1)}>Next</button>
         </div>}
-      </Panel>
-      <Panel title="Add a listing">
-        <form onSubmit={addJob}>
-          <div className="feature-fields">
-            <label>Job title<input name="title" required maxLength={150}/></label>
-            <label>Company<input name="company" required maxLength={150}/></label>
-            <label>Location<input name="location" maxLength={150}/></label>
-            <label>Application link<input name="url" type="url" required maxLength={2000}/></label>
-          </div>
-          <label>Job description<textarea name="description" rows="4" maxLength={15000}/></label>
-          <button className="feature-button">Add listing</button>
-        </form>
       </Panel>
       </div>
       <aside className="jobs-overview" aria-label="Workspace overview">

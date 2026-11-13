@@ -299,3 +299,12 @@
 @media (max-width: 1000px) {
   .profile-layout { grid-template-columns: 1fr; }
 }
+
+.job-platforms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.job-platforms .job-platform { width: 100%; margin: 0; text-align: left; }
+.job-platforms .job-platform[aria-pressed="true"] { outline: 2px solid #b78aed; }
