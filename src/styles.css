@@ -308,3 +308,7 @@
 }
 .job-platforms .job-platform { width: 100%; margin: 0; text-align: left; }
 .job-platforms .job-platform[aria-pressed="true"] { outline: 2px solid #b78aed; }
+
+.job-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.company-logo { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
+.company-initials { display: grid; place-items: center; color: #d7bcf6; font-weight: 700; }

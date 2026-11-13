@@ -90,6 +90,26 @@ async function fetchJobs(source, terms) {
   return jobs.filter(job => safeUrl(job.url)).map(job => ({ ...job, source }));
 }
 
+const companyLogos = {
+  cloudflare: 'cloudflare',
+  figma: 'figma',
+  stripe: 'stripe',
+  spotify: 'spotify',
+};
+
+function CompanyLogo({ company = '' }) {
+  const name = company.trim();
+  const logo = Object.hasOwn(companyLogos, name.toLowerCase()) ? companyLogos[name.toLowerCase()] : null;
+  const [failedLogo, setFailedLogo] = useState(null);
+  if (!logo || failedLogo === logo) {
+    return <span className="company-logo company-initials" aria-hidden="true">
+      {name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() || '•'}
+    </span>;
+  }
+  return <img className="company-logo" src={import.meta.env.BASE_URL + 'logos/' + logo + '.svg'}
+    alt="" width="34" height="34" loading="lazy" onError={() => setFailedLogo(logo)}/>;
+}
+
 function keywords(text) {
   const common = new Set('the and for with from you your our are will has have can this that work team years role job experience'.split(' '));
   return new Set((text.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) ?? []).filter(word => !common.has(word)));
@@ -323,7 +343,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     content = <Panel title={page === 'saved' ? 'Saved listings' : 'Application tracker'}>
       {!entries.length && <p>Save a job from <a href="#jobs">Jobs</a> to start tracking it.</p>}
       {entries.map(job => <article className="job-row" key={job.id}>
-        <div><h3>{job.title}</h3><p>{job.company}</p></div>
+        <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><p>{job.company}</p></div></div>
         <div className="feature-actions">
           <select aria-label={'Status for ' + job.title} value={job.status} onChange={event => track(job, event.target.value)}>
             {statuses.map(status => <option key={status}>{status}</option>)}
@@ -374,7 +394,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
         {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, hits }) => <article className="job-row job-result" key={job.id}>
-          <div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div>
+          <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div></div>
           <div className="feature-actions"><a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply on site <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
