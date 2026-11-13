@@ -85,8 +85,11 @@ function Panel({ title, children }) {
   return <section className="feature-panel"><h2>{title}</h2>{children}</section>;
 }
 
-export function Workspace({ page }) {
-  const [resume, saveResume] = useStored('jobbuddy-resume', { name: '', text: '' });
+export function useResume() {
+  return useStored('jobbuddy-resume', { name: '', text: '' });
+}
+
+export function Workspace({ page, resume, saveResume, locked }) {
   const [profile, saveProfile] = useStored('jobbuddy-profile', {});
   const [jobs, saveJobs] = useStored('jobbuddy-jobs', []);
   const [applications, saveApplications] = useStored('jobbuddy-applications', {});
@@ -120,7 +123,7 @@ export function Workspace({ page }) {
     setMessage('');
     try {
       const text = (await readResume(file)).trim();
-      if (!text) throw Error('No selectable text found. Paste your resume text below.');
+      if (!text) throw Error('No selectable text found. Choose a text-based PDF, DOCX, or TXT resume.');
       saveResume({ name: file.name, text: text.slice(0, 100000) });
       fillProfileFromResume(text);
       setMessage('Resume imported. Review the filled fields in Profile.');
@@ -192,7 +195,9 @@ export function Workspace({ page }) {
   let content;
   if (page === 'resume') {
     content = <Panel title="Your resume">
-      <p>Import a PDF, DOCX, or TXT file, or paste your resume below. Your resume stays in this browser.</p>
+      <p>{locked
+        ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved in this browser.'
+        : 'Import a replacement or edit your saved resume text below. Your resume stays in this browser.'}</p>
       <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
         event.preventDefault();
         upload(event.dataTransfer.files[0]);
@@ -208,7 +213,7 @@ export function Workspace({ page }) {
           }} disabled={uploading}/>
         </label>
       </div>
-      <form onSubmit={event => {
+      {!locked && <form onSubmit={event => {
         event.preventDefault();
         const text = new FormData(event.currentTarget).get('resume').trim();
         attempt(() => saveResume({ name: text ? resume.name || 'Pasted resume' : '', text }), 'Resume saved.');
@@ -216,7 +221,7 @@ export function Workspace({ page }) {
         <label>{resume.name || 'Resume text'}<textarea key={resume.text} name="resume" rows="14" defaultValue={resume.text} maxLength={100000}/></label>
         <div className="feature-actions"><button className="feature-button" disabled={uploading}>Save resume</button>
           {resume.text && <button type="button" disabled={uploading} className="feature-button secondary" onClick={() => attempt(() => saveResume({ name: '', text: '' }), 'Resume removed.')}><Trash2 size={15}/> Remove resume</button>}</div>
-      </form>
+      </form>}
     </Panel>;
   } else if (page === 'profile' || page === 'settings' || page === 'preferences') {
     content = <Panel title={page === 'profile' ? 'Career profile' : 'Profile preferences'}>

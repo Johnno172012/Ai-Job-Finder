@@ -182,3 +182,11 @@
 @media (max-width: 1060px) {
   .jobs-dashboard { grid-template-columns: 1fr; }
 }
+
+.onboarding-shell {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 20%, #2c164d, #0d0a18 70%);
+}
+.onboarding-shell main { width: min(100%, 620px); }

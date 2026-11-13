@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BriefcaseBusiness, FileText, UserRound, Layers, PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight, CreditCard, Bookmark, Sparkles, ArrowUpRight, Settings2, SlidersHorizontal, Menu, X, Check } from 'lucide-react';
 import './styles.css';
-import { Workspace } from './workspace.jsx';
+import { useResume, Workspace } from './workspace.jsx';
 
 const pages = [
   { id: 'jobs', name: 'Jobs', icon: BriefcaseBusiness },
@@ -49,13 +49,27 @@ function Starfield({ sidebar = false }) {
   </div>;
 }
 function App() {
-  const [page, setPage] = useState(getPage);
+  const [requestedPage, setPage] = useState(getPage);
+  const [resume, saveResume] = useResume();
+  const locked = !resume.text?.trim() || !/\.(pdf|docx|txt)$/i.test(resume.name ?? '');
+  const page = locked ? pages.find(item => item.id === 'resume') : requestedPage;
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('jobbuddy-sidebar') === 'collapsed');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => { const update = () => { setPage(getPage()); setMobileOpen(false); setAccountOpen(false); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { document.title = `${page.name} · JobBuddy AI`; }, [page]);
   useEffect(() => { const close = e => { if(e.key === 'Escape') { setAccountOpen(false); setMobileOpen(false); } }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
+  useEffect(() => {
+    if (locked && location.hash !== '#resume') location.replace('#resume');
+  }, [locked, requestedPage]);
+  if (locked) return (
+    <div className="onboarding-shell">
+      <main aria-labelledby="onboarding-title">
+        <h1 id="onboarding-title">Get started with JobBuddy AI</h1>
+        <Workspace page="resume" resume={resume} saveResume={saveResume} locked />
+      </main>
+    </div>
+  );
   const toggle = () => setCollapsed(v => { localStorage.setItem('jobbuddy-sidebar', v ? 'expanded' : 'collapsed'); return !v; });
   const navigate = id => { location.hash = id; setMobileOpen(false); setAccountOpen(false); };
   const navLink = p => <a key={p.id} href={`#${p.id}`} className={`nav-link ${page.id === p.id ? 'active' : ''}`} aria-current={page.id === p.id ? 'page' : undefined} data-tooltip={p.name} onClick={() => { setMobileOpen(false); setAccountOpen(false); }}><p.icon size={19}/><span className="nav-label">{p.name}</span>{page.id === p.id && <span className="active-dot"/>}</a>;
@@ -75,7 +89,7 @@ function App() {
       </div>
       <div className="sidebar-collapse"><button onClick={toggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} data-tooltip={collapsed ? 'Expand sidebar' : undefined}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}<span>Collapse sidebar</span><span className="collapse-shortcut">‹</span></button></div>
     </aside>
-    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><Workspace page={page.id}/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
+    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div><Workspace page={page.id} resume={resume} saveResume={saveResume}/></main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
   </div>;
 }
 
