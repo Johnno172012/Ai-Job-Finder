@@ -48,20 +48,51 @@ function Starfield({ sidebar = false }) {
     <div className="shooting-star shooting-star-one"/><div className="shooting-star shooting-star-two"/><div className="shooting-star shooting-star-three"/>
   </div>;
 }
+function Landing({ ready }) {
+  return <div className="landing">
+    <header className="landing-nav">
+      <a className="brand" href="#"><span className="brand-symbol"><BriefcaseBusiness size={19}/></span>JobBuddy AI</a>
+      <a className="feature-button" href={ready ? '#jobs' : '#resume'}>{ready ? 'Open workspace' : 'Get started'} <ArrowUpRight size={16}/></a>
+    </header>
+    <main className="landing-main">
+      <h1>Your job search, in one place.</h1>
+      <p>Upload your resume, find live Greenhouse listings, and track every application.</p>
+      <section className="landing-preview" aria-label="Example workspace">
+        <div className="preview-bar"><span aria-hidden="true">● ● ●</span> Workspace / Jobs <small>Example</small></div>
+        <div className="preview-grid">
+          <div className="preview-card">
+            <h2>Profile setup</h2>
+            <ul><li><Check size={16}/> Upload your resume</li><li><Check size={16}/> Review extracted details</li><li><BriefcaseBusiness size={16}/> Find matching roles</li></ul>
+          </div>
+          <div className="preview-card">
+            <h2>Application tracker</h2>
+            {[['Frontend Engineer', 'Applied'], ['Product Designer', 'Interviewing'], ['Full Stack Developer', 'Saved']].map(([role, status]) =>
+              <div className="preview-job" key={role}><strong>{role}</strong><span>{status}</span></div>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>;
+}
+
 function App() {
-  const [requestedPage, setPage] = useState(getPage);
+  const [route, setRoute] = useState(() => location.hash);
+  const requestedPage = getPage();
+  const landing = route === '' || route === '#';
   const [resume, saveResume] = useResume();
   const locked = !resume.text?.trim() || !/\.(pdf|docx|txt)$/i.test(resume.name ?? '');
   const page = locked ? pages.find(item => item.id === 'resume') : requestedPage;
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('jobbuddy-sidebar') === 'collapsed');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  useEffect(() => { const update = () => { setPage(getPage()); setMobileOpen(false); setAccountOpen(false); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
-  useEffect(() => { document.title = `${page.name} · JobBuddy AI`; }, [page]);
+  useEffect(() => { const update = () => { setRoute(location.hash); setMobileOpen(false); setAccountOpen(false); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
+  useEffect(() => { document.title = landing ? 'JobBuddy AI' : `${page.name} · JobBuddy AI`; }, [landing, page]);
   useEffect(() => { const close = e => { if(e.key === 'Escape') { setAccountOpen(false); setMobileOpen(false); } }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
   useEffect(() => {
-    if (locked && location.hash !== '#resume') location.replace('#resume');
-  }, [locked, requestedPage]);
+    if (!landing && locked && location.hash !== '#resume') location.replace('#resume');
+  }, [landing, locked, route]);
+  if (landing) return <Landing ready={!locked}/>;
   if (locked) return (
     <div className="onboarding-shell">
       <main aria-labelledby="onboarding-title">
