@@ -55,7 +55,7 @@ function safeUrl(value) {
 
 const platforms = ['Greenhouse', 'Lever', 'Workable', 'Wellfound'];
 
-async function fetchJobs(source) {
+async function fetchJobs(source, terms) {
   async function get(url) {
     const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (response.status === 503 && url.startsWith('/api/')) throw Error('Requires Brave Search setup');
@@ -84,7 +84,7 @@ async function fetchJobs(source) {
       description: job.descriptionPlain ?? '',
     }));
   } else {
-    jobs = await get(`/api/job-search?source=${source}`);
+    jobs = await get(`/api/job-search?source=${source}&terms=${encodeURIComponent(terms)}`);
     if (!Array.isArray(jobs)) throw Error('Requires Brave Search setup');
   }
   return jobs.filter(job => safeUrl(job.url)).map(job => ({ ...job, source }));
@@ -144,6 +144,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   const [profileTab, setProfileTab] = useState('personal');
   const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
   const [remoteJobs, setRemoteJobs] = useState(() => cache.jobs ?? []);
+  const [useAI, setUseAI] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [message, setMessage] = useState('');
@@ -157,8 +158,21 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     catch (failure) { setError(failure.message); }
   }
 
-  function fillProfileFromResume(text) {
-    const suggestions = Object.fromEntries(Object.entries(resumeProfile(text)).filter(([key, value]) => value && !profile[key]?.trim()));
+  async function fillProfileFromResume(text, ai = false) {
+    let extracted = resumeProfile(text);
+    if (ai) {
+      const { data } = await cloud.auth.getSession();
+      const response = await fetch('/api/resume-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.session?.access_token },
+        body: JSON.stringify({ text: text.slice(0, 10000) }),
+        signal: AbortSignal.timeout(25000),
+      });
+      const profile = await response.json();
+      if (!response.ok) throw Error(profile.error);
+      extracted = { ...extracted, ...Object.fromEntries(Object.entries(profile).filter(([, value]) => value)) };
+    }
+    const suggestions = Object.fromEntries(Object.entries(extracted).filter(([key, value]) => value && !profile[key]?.trim()));
     return saveProfile({ ...profile, ...suggestions });
   }
 
@@ -176,7 +190,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         if (error) throw error;
       }
       try {
-        await fillProfileFromResume(text);
+        await fillProfileFromResume(text, useAI);
         await saveResume({ name: file.name, text: text.slice(0, 100000), path });
       } catch (error) {
         if (path) await cloud.storage.from('resume').remove([path]);
@@ -192,7 +206,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     setLoadingJobs(true);
     setError('');
     const sources = platforms;
-    const results = await Promise.allSettled(sources.map(fetchJobs));
+    const results = await Promise.allSettled(sources.map(source => fetchJobs(source, [profile.role, profile.location, profile.skills?.split(/[,\n]/).slice(0, 3).join(' ')].filter(Boolean).join(' ').slice(0, 120))));
     setSourceStatus(Object.fromEntries(sources.map((source, index) => {
       const result = results[index];
       return [source, result.status === 'fulfilled' ? `${result.value.length} listings` : result.reason.message];
@@ -244,6 +258,10 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       <p>{locked
         ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved to your workspace.'
         : 'Import a replacement or edit your saved resume text below. Your resume is saved to your workspace.'}</p>
+      {account && <label className="resume-ai-option">
+        <span><input type="checkbox" checked={useAI} disabled={uploading} onChange={event => setUseAI(event.target.checked)}/> Use Gemini to extract profile details</span>
+        <small>This sends up to 10,000 characters of resume text to Google Gemini.</small>
+      </label>}
       <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
         event.preventDefault();
         upload(event.dataTransfer.files[0]);

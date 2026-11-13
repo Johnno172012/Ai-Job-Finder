@@ -2,7 +2,10 @@ const domains = { Workable: 'apply.workable.com', Wellfound: 'wellfound.com/jobs
 const cache = new Map();
 
 export default async function handler(req, res) {
-  const source = new URL(req.url, 'http://localhost').searchParams.get('source');
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const source = params.get('source');
+  const terms = (params.get('terms') ?? '').replace(/[^\p{L}\p{N} +#.,-]/gu, ' ').trim().slice(0, 120);
+  const cacheKey = source + ':' + terms.toLowerCase();
   if (req.method !== 'GET' || !Object.hasOwn(domains, source)) {
     res.writeHead(400).end();
     return;
@@ -16,14 +19,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const cached = cache.get(source);
+    const cached = cache.get(cacheKey);
     if (cached && cached.expires > Date.now()) {
       res.end(JSON.stringify(cached.jobs));
       return;
     }
 
     const endpoint = new URL('https://api.search.brave.com/res/v1/web/search');
-    endpoint.searchParams.set('q', `site:${domains[source]} software engineering jobs`);
+    endpoint.searchParams.set('q', `site:${domains[source]} jobs ${terms || 'software engineering'}`);
     endpoint.searchParams.set('count', '20');
     const response = await fetch(endpoint, {
       headers: { 'X-Subscription-Token': key, Accept: 'application/json' },
@@ -40,7 +43,8 @@ export default async function handler(req, res) {
       return [{ id: url.origin + url.pathname, source, title: result.title,
         company: '', location: '', url: url.origin + url.pathname, description: result.description ?? '' }];
     });
-    cache.set(source, { jobs, expires: Date.now() + 15 * 60 * 1000 });
+    if (cache.size >= 100) cache.delete(cache.keys().next().value);
+    cache.set(cacheKey, { jobs, expires: Date.now() + 6 * 60 * 60 * 1000 });
     res.end(JSON.stringify(jobs));
   } catch {
     res.writeHead(502).end(JSON.stringify({ error: 'Search unavailable' }));
