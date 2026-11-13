@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BriefcaseBusiness, FileText, UserRound, Layers, PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight, CreditCard, Sparkles, ArrowUpRight, Settings2, SlidersHorizontal, Menu, X, Check } from 'lucide-react';
+import { BriefcaseBusiness, FileText, UserRound, Layers, PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight, CreditCard, Bookmark, Sparkles, ArrowUpRight, Settings2, SlidersHorizontal, Menu, X, Check } from 'lucide-react';
 import './styles.css';
 import { Workspace } from './workspace.jsx';
 
 const pages = [
   { id: 'jobs', name: 'Jobs', icon: BriefcaseBusiness },
+  { id: 'saved', name: 'Saved Jobs', icon: Bookmark },
   { id: 'resume', name: 'Resume', icon: FileText },
   { id: 'profile', name: 'Profile', icon: UserRound },
   { id: 'applications', name: 'Application Status', icon: Layers },
