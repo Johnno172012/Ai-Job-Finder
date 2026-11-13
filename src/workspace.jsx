@@ -158,6 +158,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   const [sourceStatus, setSourceStatus] = useState({});
   const [query, setQuery] = useState('');
   const [jobPage, setJobPage] = useState(0);
+  const [showAllJobs, setShowAllJobs] = useState(false);
   const [jobSource, setJobSource] = useState('');
   const [profileTab, setProfileTab] = useState('personal');
   const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
@@ -360,10 +361,11 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       .sort((a, b) => (b.match.score ?? -1) - (a.match.score ?? -1) || b.match.matched.length - a.match.matched.length);
     const lastPage = Math.max(0, Math.ceil(matches.length / pageSize) - 1);
     const currentPage = Math.min(jobPage, lastPage);
+    const visibleJobs = showAllJobs ? matches : matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
     content = <div className="jobs-dashboard">
       <div className="jobs-results">
       <Panel title={profile.name?.trim() ? `Welcome, ${profile.name.trim().split(/\s+/)[0]}` : 'Welcome to Jobs'}>
-        <p>{matches.length ? `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
+        <p>{matches.length ? showAllJobs ? `Showing all ${matches.length} matching listings.` : `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
       </Panel>
       <Panel title="Top job matches">
         <p>Ranked by how many skills mentioned in each listing appear in your resume and profile.</p>
@@ -389,9 +391,13 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
             {[...new Set(listings.filter(job => (!platform || job.source === platform) && job.company).map(job => job.company))].sort().map(company => <option key={company}>{company}</option>)}
           </select></label>
           <a className="feature-button secondary" href="#saved">Saved jobs</a>
+          {lastPage > 0 && <button type="button" className="feature-button secondary" aria-pressed={showAllJobs} onClick={() => {
+            setShowAllJobs(!showAllJobs);
+            setJobPage(0);
+          }}>Show all results</button>}
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
-        {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, match }) => <article className="job-row job-result" key={job.id}>
+        {visibleJobs.map(({ job, match }) => <article className="job-row job-result" key={job.id}>
           <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p></div></div>
           <div className="job-match">
             {match.score === null ? <small>Not enough skill details</small> : <>
@@ -404,7 +410,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
           <div className="feature-actions job-result-actions"><a className="feature-button" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply now <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
-        {lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
+        {!showAllJobs && lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
           <button className="feature-button secondary" disabled={currentPage === 0} onClick={() => setJobPage(currentPage - 1)}>Previous</button>
           <span>Page {currentPage + 1} of {lastPage + 1}</span>
           <button className="feature-button secondary" disabled={currentPage === lastPage} onClick={() => setJobPage(currentPage + 1)}>Next</button>
