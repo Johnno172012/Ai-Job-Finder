@@ -99,19 +99,27 @@ export function Workspace({ page }) {
     setError('');
     setMessage('');
     try {
-      const response = await fetch('https://www.arbeitnow.com/api/job-board-api', { signal: AbortSignal.timeout(12000) });
-      if (!response.ok) throw Error();
-      const { data } = await response.json();
-      setRemoteJobs(data.filter(job => safeUrl(job.url)).map(job => ({
-        id: 'arbeitnow-' + job.slug,
-        title: job.title,
-        company: job.company_name,
-        location: job.location,
-        url: job.url,
-        description: (job.tags ?? []).join(' ') + ' ' + (job.description ?? '').replace(/<[^>]*>/g, ' '),
-      })));
-      setMessage('Loaded listings from Arbeitnow.');
-    } catch { setError('Live listings are unavailable. Try again or add a listing manually.'); }
+      const boards = [['cloudflare', 'Cloudflare'], ['figma', 'Figma'], ['stripe', 'Stripe']];
+      const results = await Promise.allSettled(boards.map(async ([board, company]) => {
+        const endpoint = `https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`;
+        const response = await fetch(endpoint, { signal: AbortSignal.timeout(12000) });
+        if (!response.ok) throw Error(company);
+        const { jobs } = await response.json();
+        return jobs.filter(job => safeUrl(job.absolute_url)).map(job => ({
+          id: `greenhouse-${board}-${job.id}`,
+          title: job.title,
+          company: job.company_name || company,
+          location: job.location?.name ?? '',
+          url: job.absolute_url,
+          description: (job.content ?? '').replace(/&lt;[\s\S]*?&gt;|<[^>]*>/g, ' '),
+        }));
+      }));
+      const available = results.filter(result => result.status === 'fulfilled');
+      if (!available.length) throw Error();
+      const listings = available.flatMap(result => result.value);
+      setRemoteJobs(listings);
+      setMessage(`Loaded ${listings.length} Greenhouse listings from ${available.length} of ${boards.length} employer boards.`);
+    } catch { setError('Greenhouse listings are unavailable. Try again or add a listing manually.'); }
     finally { setLoadingJobs(false); }
   }
 
@@ -198,7 +206,7 @@ export function Workspace({ page }) {
         <p>{skillWords.size ? 'Listings are ranked by shared words from your resume and profile.' : <>Add a <a href="#resume">resume</a> or <a href="#profile">career profile</a> to rank listings by keyword overlap.</>}</p>
         <div className="feature-actions">
           <label className="search-field"><Search size={16}/><input aria-label="Filter jobs" placeholder="Filter by role, company, or location" value={query} onChange={event => setQuery(event.target.value)}/></label>
-          <button className="feature-button" onClick={discover} disabled={loadingJobs}>{loadingJobs ? 'Loading…' : 'Load live jobs'}</button>
+          <button className="feature-button" onClick={discover} disabled={loadingJobs}>{loadingJobs ? 'Loading…' : 'Load Greenhouse jobs'}</button>
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : 'Load live jobs or add a listing to get started.'}</p>}
         {matches.map(({ job, hits }) => <article className="job-row" key={job.id}>
