@@ -113,10 +113,8 @@ export function Workspace({ page }) {
     saveProfile({ ...profile, ...suggestions });
   }
 
-  async function upload(event) {
-    const file = event.target.files[0];
-    event.target.value = '';
-    if (!file) return;
+  async function upload(file) {
+    if (!file || uploading) return;
     setUploading(true);
     setError('');
     setMessage('');
@@ -183,11 +181,33 @@ export function Workspace({ page }) {
     }, status ? 'Application updated.' : 'Removed from tracker.');
   }
 
+  const profileChecks = [
+    ['Basic information', profile.name && profile.email],
+    ['Summary', profile.summary],
+    ['Work experience', profile.experience],
+    ['Skills', profile.skills],
+    ['Resume', resume.text],
+  ];
+  const completion = Math.round(100 * profileChecks.filter(([, value]) => value?.trim()).length / profileChecks.length);
   let content;
   if (page === 'resume') {
     content = <Panel title="Your resume">
       <p>Import a PDF, DOCX, or TXT file, or paste your resume below. Your resume stays in this browser.</p>
-      <label className="feature-button upload-button"><Upload size={16}/> {uploading ? 'Reading file…' : 'Import resume'} <input type="file" accept=".pdf,.docx,.txt" onChange={upload} disabled={uploading}/></label>
+      <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
+        event.preventDefault();
+        upload(event.dataTransfer.files[0]);
+      }}>
+        <Upload size={26} aria-hidden="true"/>
+        <strong>Drop your resume here</strong>
+        <small>PDF, DOCX, or TXT · Up to 10 MB</small>
+        <label className="feature-button upload-button">
+          {uploading ? 'Reading file…' : 'Choose file'}
+          <input type="file" accept=".pdf,.docx,.txt" onChange={event => {
+            upload(event.target.files[0]);
+            event.target.value = '';
+          }} disabled={uploading}/>
+        </label>
+      </div>
       <form onSubmit={event => {
         event.preventDefault();
         const text = new FormData(event.currentTarget).get('resume').trim();
@@ -242,9 +262,14 @@ export function Workspace({ page }) {
       .sort((a, b) => b.hits - a.hits);
     const lastPage = Math.max(0, Math.ceil(matches.length / pageSize) - 1);
     const currentPage = Math.min(jobPage, lastPage);
-    content = <>
-      <Panel title="Find jobs">
+    content = <div className="jobs-dashboard">
+      <div className="jobs-results">
+      <Panel title="Top job matches">
         <p>{skillWords.size ? 'Listings are ranked by shared words from your resume and profile.' : <>Add a <a href="#resume">resume</a> or <a href="#profile">career profile</a> to rank listings by keyword overlap.</>}</p>
+        <div className="job-platform">
+          <span className="platform-mark" aria-hidden="true">G</span>
+          <span><strong>Greenhouse</strong><small>Job board</small></span>
+        </div>
         <div className="feature-actions">
           <label className="search-field"><Search size={16}/><input aria-label="Filter jobs" placeholder="Filter by role, company, or location" value={query} onChange={event => { setQuery(event.target.value); setJobPage(0); }}/></label>
           <button className="feature-button" onClick={discover} disabled={loadingJobs}>{loadingJobs ? 'Loading…' : 'Load Greenhouse jobs'}</button>
@@ -280,9 +305,24 @@ export function Workspace({ page }) {
           <button className="feature-button">Add listing</button>
         </form>
       </Panel>
-    </>;
+      </div>
+      <aside className="jobs-overview" aria-label="Workspace overview">
+        <Panel title="Profile completeness">
+          <div className="completion-ring" style={{ '--completion': completion + '%' }}><strong>{completion}%</strong></div>
+          <ul className="profile-checks">
+            {profileChecks.map(([label, value]) => <li key={label}><span aria-hidden="true">{value?.trim() ? '✓' : '○'}</span> {label}<span className="visually-hidden">{value?.trim() ? ' complete' : ' incomplete'}</span></li>)}
+          </ul>
+          <a className="feature-button" href={resume.text ? '#profile' : '#resume'}>{resume.text ? 'Improve profile' : 'Upload resume'}</a>
+        </Panel>
+        <Panel title="Recent activity">
+          {Object.values(applications).slice(-4).reverse().map(job => <p key={job.id}><strong>{job.title}</strong><br/>{job.status} · {job.company}</p>)}
+          {!Object.keys(applications).length && <p>Saved jobs and applications will appear here.</p>}
+          <a className="feature-button secondary" href="#applications">View applications</a>
+        </Panel>
+      </aside>
+    </div>;
   }
-  return <div className="feature-content">
+  return <div className={page === 'jobs' ? 'feature-content feature-content-wide' : 'feature-content'}>
     <div role="status">{message}</div>
     {error && <p className="feature-error" role="alert">{error}</p>}
     <Fragment key={page}>{content}</Fragment>

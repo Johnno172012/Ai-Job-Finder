@@ -117,3 +117,68 @@
 @media (max-width: 550px) {
   .feature-fields { grid-template-columns: 1fr; }
 }
+
+.feature-content-wide { width: min(100%, 1280px); }
+.jobs-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 290px);
+  align-items: start;
+  gap: 20px;
+}
+.jobs-results, .jobs-overview { display: grid; min-width: 0; gap: 20px; }
+.job-platform {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 8px 14px 8px 9px;
+  margin: 0 0 14px;
+  border: 1px solid #4b7466;
+  border-radius: 10px;
+  background: #233732;
+}
+.platform-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: #315d50;
+  color: #c4f6df;
+  font-weight: 700;
+}
+.job-platform small { display: block; color: #bad8cd; }
+.completion-ring {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-block: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a1329 61%, transparent 62%),
+    conic-gradient(#9ce4c5 var(--completion), #3a2c50 0);
+  font-size: 18px;
+}
+.profile-checks { list-style: none; padding: 0; line-height: 1.9; color: #ddd0f0; }
+.profile-checks li > span:first-child { color: #9ce4c5; }
+.resume-drop {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 28px 16px;
+  margin-bottom: 18px;
+  border: 1px dashed #9470c0;
+  border-radius: 12px;
+  background: #221831;
+}
+.resume-drop small { color: #c1b3d5; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+@media (max-width: 1060px) {
+  .jobs-dashboard { grid-template-columns: 1fr; }
+}
