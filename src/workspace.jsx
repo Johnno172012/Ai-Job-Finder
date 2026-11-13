@@ -144,7 +144,6 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   const [profileTab, setProfileTab] = useState('personal');
   const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
   const [remoteJobs, setRemoteJobs] = useState(() => cache.jobs ?? []);
-  const [useAI, setUseAI] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const searchTerms = [profile.role, profile.location, profile.skills?.split(/[,\n]/).slice(0, 3).join(' ')]
@@ -160,9 +159,9 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     catch (failure) { setError(failure.message); }
   }
 
-  async function fillProfileFromResume(text, ai = false) {
+  async function fillProfileFromResume(text) {
     let extracted = resumeProfile(text);
-    if (ai) {
+    if (account) {
       const { data } = await cloud.auth.getSession();
       const response = await fetch('/api/resume-profile', {
         method: 'POST',
@@ -192,7 +191,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         if (error) throw error;
       }
       try {
-        await fillProfileFromResume(text, useAI);
+        await fillProfileFromResume(text);
         await saveResume({ name: file.name, text: text.slice(0, 100000), path });
       } catch (error) {
         if (path) await cloud.storage.from('resume').remove([path]);
@@ -267,10 +266,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       <p>{locked
         ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved to your workspace.'
         : 'Import a replacement or edit your saved resume text below. Your resume is saved to your workspace.'}</p>
-      {account && <label className="resume-ai-option">
-        <span><input type="checkbox" checked={useAI} disabled={uploading} onChange={event => setUseAI(event.target.checked)}/> Use Gemini to extract profile details</span>
-        <small>This sends up to 10,000 characters of resume text to Google Gemini.</small>
-      </label>}
+      {account && <p>Uploading a resume sends up to 10,000 characters of its text to Google Gemini to extract your profile details.</p>}
       <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
         event.preventDefault();
         upload(event.dataTransfer.files[0]);
