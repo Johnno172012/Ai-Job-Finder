@@ -154,7 +154,7 @@ export function useResume(account) {
 export function Workspace({ page, resume, saveResume, locked, account }) {
   const [profile, saveProfile] = useStored('jobbuddy-profile', {}, account);
   const [applications, saveApplications] = useStored('jobbuddy-applications', {}, account);
-  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState(platforms);
   const [sourceStatus, setSourceStatus] = useState({});
   const [query, setQuery] = useState('');
   const [jobPage, setJobPage] = useState(0);
@@ -355,7 +355,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     content = <Panel title="Workspace plan"><p>This browser workspace is free. Resume import, keyword matching, and application tracking do not use credits.</p></Panel>;
   } else {
     const listings = remoteJobs;
-    const platformJobs = listings.filter(job => !selectedPlatforms.length || selectedPlatforms.includes(job.source));
+    const platformJobs = listings.filter(job => selectedPlatforms.includes(job.source));
     const matches = platformJobs.filter(job => (!jobSource || job.company === jobSource) && [job.title, job.company, job.location].join(' ').toLowerCase().includes(query.toLowerCase().trim()))
       .map(job => ({ job, match: matchJob(job) }))
       .sort((a, b) => (b.match.score ?? -1) - (a.match.score ?? -1) || b.match.matched.length - a.match.matched.length);
@@ -372,9 +372,11 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         <h3>Job platforms</h3>
         <div className="job-platforms" aria-label="Filter by job platform">
           {platforms.map(source => <button key={source} type="button" className="job-platform"
-            aria-pressed={selectedPlatforms.includes(source)} onClick={() => {
+            aria-pressed={selectedPlatforms.includes(source)}
+            aria-disabled={selectedPlatforms.length === 1 && selectedPlatforms.includes(source)} onClick={() => {
+              if (selectedPlatforms.length === 1 && selectedPlatforms.includes(source)) return;
               setSelectedPlatforms(previous => previous.includes(source)
-                ? previous.filter(item => item !== source)
+                ? (previous.length > 1 ? previous.filter(item => item !== source) : previous)
                 : [...previous, source]);
               setJobSource('');
               setJobPage(0);
