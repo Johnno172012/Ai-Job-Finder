@@ -72,12 +72,15 @@ function resumeProfile(text) {
     summary: section(/^(summary|profile|objective)\s*:?$/i),
     skills: section(/^(skills|technical skills)\s*:?$/i),
     experience: section(/^(experience|work experience|employment)\s*:?$/i),
+    education: section(/^education\s*:?$/i),
+    projects: section(/^projects\s*:?$/i),
+    certifications: section(/^certifications\s*:?$/i),
   };
 }
 
 const profileFields = [
-  ['name', 'Name'], ['email', 'Email'], ['phone', 'Phone'], ['role', 'Target role'],
-  ['location', 'Location'], ['linkedin', 'LinkedIn'], ['github', 'GitHub'],
+  ['name', 'Full name'], ['email', 'Email'], ['phone', 'Phone'], ['role', 'Target role'],
+  ['location', 'Location'], ['headline', 'Headline'], ['linkedin', 'LinkedIn URL'], ['github', 'GitHub URL'], ['website', 'Website'],
 ];
 const pageSize = 20;
 
@@ -188,10 +191,18 @@ export function Workspace({ page, resume, saveResume, locked }) {
     ['Basic information', profile.name && profile.email],
     ['Summary', profile.summary],
     ['Work experience', profile.experience],
+    ['Education', profile.education],
     ['Skills', profile.skills],
     ['Resume', resume.text],
   ];
   const completion = Math.round(100 * profileChecks.filter(([, value]) => value?.trim()).length / profileChecks.length);
+  const profileCompleteness = <Panel title="Profile completeness">
+          <div className="completion-ring" style={{ '--completion': completion + '%' }}><strong>{completion}%</strong></div>
+          <ul className="profile-checks">
+            {profileChecks.map(([label, value]) => <li key={label}><span aria-hidden="true">{value?.trim() ? '✓' : '○'}</span> {label}<span className="visually-hidden">{value?.trim() ? ' complete' : ' incomplete'}</span></li>)}
+          </ul>
+          <a className="feature-button" href={resume.text ? '#profile' : '#resume'}>{resume.text ? 'Improve profile' : 'Upload resume'}</a>
+        </Panel>;
   let content;
   if (page === 'resume') {
     content = <Panel title="Your resume">
@@ -224,10 +235,10 @@ export function Workspace({ page, resume, saveResume, locked }) {
       </form>}
     </Panel>;
   } else if (page === 'profile' || page === 'settings' || page === 'preferences') {
-    content = <Panel title={page === 'profile' ? 'Career profile' : 'Profile preferences'}>
-      <p>{[...profileFields.map(([key]) => key), 'summary', 'skills', 'experience'].filter(key => profile[key]?.trim()).length} of 10 profile fields completed.</p>
+    content = <div className="profile-layout">{profileCompleteness}<Panel title={page === 'profile' ? 'Career profile' : 'Profile preferences'}>
+      <p>Review and edit the information extracted from your resume.</p>
       <div className="feature-actions">
-        {['personal', 'summary', 'skills', 'experience'].map(tab => <button key={tab} className="feature-button secondary" aria-pressed={profileTab === tab} onClick={() => setProfileTab(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
+        {['personal', 'summary', 'skills', 'experience', 'education', 'projects', 'certifications'].map(tab => <button key={tab} className="feature-button secondary" aria-pressed={profileTab === tab} onClick={() => setProfileTab(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
         <button className="feature-button" disabled={!resume.text} onClick={() => attempt(() => {
           fillProfileFromResume(resume.text);
         }, 'Resume details added to empty fields.')}>Fill from resume</button>
@@ -242,7 +253,7 @@ export function Workspace({ page, resume, saveResume, locked }) {
         </div> : <label>{profileTab[0].toUpperCase() + profileTab.slice(1)}<textarea name={profileTab} rows="8" defaultValue={profile[profileTab]}/></label>}
         <button className="feature-button">Save profile</button>
       </form>
-    </Panel>;
+    </Panel></div>;
   } else if (page === 'applications' || page === 'saved') {
     const entries = Object.values(applications).filter(job => page !== 'saved' || job.status === 'Saved');
     content = <Panel title={page === 'saved' ? 'Saved listings' : 'Application tracker'}>
@@ -287,8 +298,8 @@ export function Workspace({ page, resume, saveResume, locked }) {
           <a className="feature-button secondary" href="#saved">Saved jobs</a>
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : 'Load live jobs or add a listing to get started.'}</p>}
-        {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, hits }) => <article className="job-row" key={job.id}>
-          <div><h3>{job.title}</h3><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div>
+        {matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(({ job, hits }) => <article className="job-row job-result" key={job.id}>
+          <div><h3>{job.title}</h3>{job.id.startsWith('greenhouse-') && <small>Greenhouse</small>}<p>{[job.company, job.location].filter(Boolean).join(' · ')}</p>{skillWords.size > 0 && <small>{hits} shared keywords</small>}</div>
           <div className="feature-actions"><a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply on site <ExternalLink size={14}/></a>
             {applications[job.id] ? <a className="feature-button secondary" href="#applications">Tracked</a> : <button className="feature-button secondary" onClick={() => track(job, 'Saved')}><Bookmark size={15}/> Save</button>}</div>
         </article>)}
@@ -312,13 +323,7 @@ export function Workspace({ page, resume, saveResume, locked }) {
       </Panel>
       </div>
       <aside className="jobs-overview" aria-label="Workspace overview">
-        <Panel title="Profile completeness">
-          <div className="completion-ring" style={{ '--completion': completion + '%' }}><strong>{completion}%</strong></div>
-          <ul className="profile-checks">
-            {profileChecks.map(([label, value]) => <li key={label}><span aria-hidden="true">{value?.trim() ? '✓' : '○'}</span> {label}<span className="visually-hidden">{value?.trim() ? ' complete' : ' incomplete'}</span></li>)}
-          </ul>
-          <a className="feature-button" href={resume.text ? '#profile' : '#resume'}>{resume.text ? 'Improve profile' : 'Upload resume'}</a>
-        </Panel>
+        {profileCompleteness}
         <Panel title="Recent activity">
           {Object.values(applications).slice(-4).reverse().map(job => <p key={job.id}><strong>{job.title}</strong><br/>{job.status} · {job.company}</p>)}
           {!Object.keys(applications).length && <p>Saved jobs and applications will appear here.</p>}
@@ -327,7 +332,7 @@ export function Workspace({ page, resume, saveResume, locked }) {
       </aside>
     </div>;
   }
-  return <div className={page === 'jobs' ? 'feature-content feature-content-wide' : 'feature-content'}>
+  return <div className={['jobs', 'profile', 'settings', 'preferences'].includes(page) ? 'feature-content feature-content-wide' : 'feature-content'}>
     <div role="status">{message}</div>
     {error && <p className="feature-error" role="alert">{error}</p>}
     <Fragment key={page}>{content}</Fragment>
