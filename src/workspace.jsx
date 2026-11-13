@@ -1,15 +1,19 @@
+import { cloud } from './cloud.jsx';
 import React, { Fragment, useEffect, useState } from 'react';
 import { Upload, Search, ExternalLink, Bookmark, Trash2 } from 'lucide-react';
 
 const statuses = ['Saved', 'Applied', 'Interviewing', 'Offer', 'Rejected', 'Withdrawn'];
 
-function useStored(key, initial) {
+function useStored(key, initial, account) {
+  const kind = key.slice(9);
   const [value, setValue] = useState(() => {
+    if (account) return account.records[kind] ?? initial;
     try { return JSON.parse(localStorage.getItem(key)) ?? initial; }
     catch { return initial; }
   });
-  function save(next) {
-    localStorage.setItem(key, JSON.stringify(next));
+  async function save(next) {
+    if (account) await account.save(kind, next);
+    else localStorage.setItem(key, JSON.stringify(next));
     setValue(next);
   }
   return [value, save];
@@ -125,36 +129,37 @@ function Panel({ title, children }) {
   return <section className="feature-panel"><h2>{title}</h2>{children}</section>;
 }
 
-export function useResume() {
-  return useStored('jobbuddy-resume', { name: '', text: '' });
+export function useResume(account) {
+  return useStored('jobbuddy-resume', { name: '', text: '' }, account);
 }
 
-export function Workspace({ page, resume, saveResume, locked }) {
-  const [profile, saveProfile] = useStored('jobbuddy-profile', {});
-  const [applications, saveApplications] = useStored('jobbuddy-applications', {});
+export function Workspace({ page, resume, saveResume, locked, account }) {
+  const [profile, saveProfile] = useStored('jobbuddy-profile', {}, account);
+  const [applications, saveApplications] = useStored('jobbuddy-applications', {}, account);
   const [platform, setPlatform] = useState('');
   const [sourceStatus, setSourceStatus] = useState({});
   const [query, setQuery] = useState('');
   const [jobPage, setJobPage] = useState(0);
   const [jobSource, setJobSource] = useState('');
   const [profileTab, setProfileTab] = useState('personal');
-  const [remoteJobs, setRemoteJobs] = useState([]);
+  const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
+  const [remoteJobs, setRemoteJobs] = useState(() => cache.jobs ?? []);
   const [uploading, setUploading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const skillWords = keywords([resume.text, profile.skills, profile.role].filter(Boolean).join(' '));
 
-  function attempt(action, success) {
+  async function attempt(action, success) {
     setError('');
     setMessage('');
-    try { action(); setMessage(success); }
+    try { await action(); setMessage(success); }
     catch (failure) { setError(failure.message); }
   }
 
   function fillProfileFromResume(text) {
     const suggestions = Object.fromEntries(Object.entries(resumeProfile(text)).filter(([key, value]) => value && !profile[key]?.trim()));
-    saveProfile({ ...profile, ...suggestions });
+    return saveProfile({ ...profile, ...suggestions });
   }
 
   async function upload(file) {
@@ -165,8 +170,19 @@ export function Workspace({ page, resume, saveResume, locked }) {
     try {
       const text = (await readResume(file)).trim();
       if (!text) throw Error('No selectable text found. Choose a text-based PDF, DOCX, or TXT resume.');
-      saveResume({ name: file.name, text: text.slice(0, 100000) });
-      fillProfileFromResume(text);
+      const path = account ? account.userId + '/' + crypto.randomUUID() : '';
+      if (path) {
+        const { error } = await cloud.storage.from('resume').upload(path, file);
+        if (error) throw error;
+      }
+      try {
+        await fillProfileFromResume(text);
+        await saveResume({ name: file.name, text: text.slice(0, 100000), path });
+      } catch (error) {
+        if (path) await cloud.storage.from('resume').remove([path]);
+        throw error;
+      }
+      if (resume.path) await cloud.storage.from('resume').remove([resume.path]);
       setMessage('Resume imported. Review the filled fields in Profile.');
     } catch (failure) { setError(failure.message); }
     finally { setUploading(false); }
@@ -183,21 +199,26 @@ export function Workspace({ page, resume, saveResume, locked }) {
     })));
     const refreshed = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
     const failed = new Set(sources.filter((_, index) => results[index].status === 'rejected'));
-    setRemoteJobs(previous => [...previous.filter(job => failed.has(job.source)), ...refreshed]);
+    const jobs = [...remoteJobs.filter(job => failed.has(job.source)), ...refreshed];
+    setRemoteJobs(jobs);
+    if (refreshed.length) {
+      try { await saveCache({ jobs, fetchedAt: Date.now() }); }
+      catch { setError('Jobs loaded, but the cache could not be saved.'); }
+    }
     setJobPage(0);
     setLoadingJobs(false);
   }
 
   useEffect(() => {
-    if (page === 'jobs' && !Object.keys(sourceStatus).length && !loadingJobs) discover();
+    if (page === 'jobs' && !Object.keys(sourceStatus).length && !loadingJobs && Date.now() - (cache.fetchedAt ?? 0) >= 21600000) discover();
   }, [page, sourceStatus, loadingJobs]);
 
   function track(job, status) {
-    attempt(() => {
+    attempt(async () => {
       const next = { ...applications };
       if (status) next[job.id] = { ...job, status };
       else delete next[job.id];
-      saveApplications(next);
+      await saveApplications(next);
     }, status ? 'Application updated.' : 'Removed from tracker.');
   }
 
@@ -221,8 +242,8 @@ export function Workspace({ page, resume, saveResume, locked }) {
   if (page === 'resume') {
     content = <Panel title="Your resume">
       <p>{locked
-        ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved in this browser.'
-        : 'Import a replacement or edit your saved resume text below. Your resume stays in this browser.'}</p>
+        ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved to your workspace.'
+        : 'Import a replacement or edit your saved resume text below. Your resume is saved to your workspace.'}</p>
       <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
         event.preventDefault();
         upload(event.dataTransfer.files[0]);
@@ -241,11 +262,17 @@ export function Workspace({ page, resume, saveResume, locked }) {
       {!locked && <form onSubmit={event => {
         event.preventDefault();
         const text = new FormData(event.currentTarget).get('resume').trim();
-        attempt(() => saveResume({ name: text ? resume.name || 'Pasted resume' : '', text }), 'Resume saved.');
+        attempt(() => saveResume({ ...resume, text }), 'Resume saved.');
       }}>
         <label>{resume.name || 'Resume text'}<textarea key={resume.text} name="resume" rows="14" defaultValue={resume.text} maxLength={100000}/></label>
         <div className="feature-actions"><button className="feature-button" disabled={uploading}>Save resume</button>
-          {resume.text && <button type="button" disabled={uploading} className="feature-button secondary" onClick={() => attempt(() => saveResume({ name: '', text: '' }), 'Resume removed.')}><Trash2 size={15}/> Remove resume</button>}</div>
+          {resume.text && <button type="button" disabled={uploading} className="feature-button secondary" onClick={() => attempt(async () => {
+            if (resume.path) {
+              const { error } = await cloud.storage.from('resume').remove([resume.path]);
+              if (error) throw error;
+            }
+            await saveResume({ name: '', text: '' });
+          }, 'Resume removed.')}><Trash2 size={15}/> Remove resume</button>}</div>
       </form>}
     </Panel>;
   } else if (page === 'profile' || page === 'settings' || page === 'preferences') {
@@ -254,7 +281,7 @@ export function Workspace({ page, resume, saveResume, locked }) {
       <div className="feature-actions">
         {['personal', 'summary', 'skills', 'experience', 'education', 'projects', 'certifications'].map(tab => <button key={tab} className="feature-button secondary" aria-pressed={profileTab === tab} onClick={() => setProfileTab(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
         <button className="feature-button" disabled={!resume.text} onClick={() => attempt(() => {
-          fillProfileFromResume(resume.text);
+          return fillProfileFromResume(resume.text);
         }, 'Resume details added to empty fields.')}>Fill from resume</button>
       </div>
       <form key={JSON.stringify([profileTab, profile])} onSubmit={event => {

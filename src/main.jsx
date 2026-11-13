@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BriefcaseBusiness, FileText, UserRound, Layers, PanelLeftClose, PanelLeftOpen, ChevronDown, ChevronRight, CreditCard, Bookmark, Sparkles, ArrowUpRight, Settings2, SlidersHorizontal, Menu, X, Check } from 'lucide-react';
 import './styles.css';
+import { AccountGate, CloudWorkspace, cloud } from './cloud.jsx';
 import { useResume, Workspace } from './workspace.jsx';
 
 const pages = [
@@ -76,11 +77,11 @@ function Landing({ ready }) {
   </div>;
 }
 
-function App() {
+function App({ account }) {
   const [route, setRoute] = useState(() => location.hash);
   const requestedPage = getPage();
   const landing = route === '' || route === '#';
-  const [resume, saveResume] = useResume();
+  const [resume, saveResume] = useResume(account);
   const locked = !resume.text?.trim() || !/\.(pdf|docx|txt)$/i.test(resume.name ?? '');
   const page = locked ? pages[0] : requestedPage;
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('jobbuddy-sidebar') === 'collapsed');
@@ -113,15 +114,15 @@ function App() {
       </div>
       <div className="sidebar-collapse"><button onClick={toggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} data-tooltip={collapsed ? 'Expand sidebar' : undefined}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}<span>Collapse sidebar</span><span className="collapse-shortcut">‹</span></button></div>
     </aside>
-    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div><span className="personal-badge"><span/>Personal workspace</span></header><main id="main-content" aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div>{locked ? <div className="locked-preview"><h2>Job platforms</h2><div className="job-platform">Greenhouse</div><h2>Top job matches</h2><div className="feature-panel">Upload your resume to see matches.</div></div> : <Workspace page={page.id} resume={resume} saveResume={saveResume}/>}</main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
+    <div className="main-shell"><Starfield/><header className="topbar"><div className="breadcrumbs"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><span className="breadcrumb-workspace">Workspace</span><ChevronRight size={13}/><span className="breadcrumb-current">{page.name}</span></div>{account && <button className="feature-button secondary" onClick={() => cloud.auth.signOut()}>Sign out</button>}</header><main id="main-content" aria-label={`${page.name} page`}><div className="page-heading"><div className="page-eyebrow">YOUR WORKSPACE</div><h1>{page.name}</h1></div>{locked ? <div className="locked-preview"><h2>Job platforms</h2><div className="job-platform">Greenhouse</div><h2>Top job matches</h2><div className="feature-panel">Upload your resume to see matches.</div></div> : <Workspace page={page.id} resume={resume} saveResume={saveResume} account={account}/>}</main><footer className="main-footer"><span>Built for your next chapter.</span><span>JobBuddy AI <span className="footer-spark">✦</span></span></footer></div>
   </div>
   {locked && <div className="resume-gate">
     <section role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} ref={element => element?.focus()}>
       <h1 id="onboarding-title">Welcome to JobBuddy AI</h1>
-      <Workspace page="resume" resume={resume} saveResume={saveResume} locked />
+      <Workspace page="resume" resume={resume} saveResume={saveResume} account={account} locked />
     </section>
   </div>}
   </>;
 }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<AccountGate>{userId => <CloudWorkspace key={userId} userId={userId}>{account => <App account={account}/>}</CloudWorkspace>}</AccountGate>);
