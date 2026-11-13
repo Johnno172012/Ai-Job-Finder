@@ -375,7 +375,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
               setJobSource('');
               setJobPage(0);
             }}>
-            <span className="platform-mark" aria-hidden="true">{source[0]}</span>
+            <img className="platform-logo" src={import.meta.env.BASE_URL + 'logos/' + source.toLowerCase() + '.png'} alt="" width="30" height="30"/>
             <span><strong>{source}</strong><small>{sourceStatus[source] ?? 'Job board'}</small></span>
           </button>)}
         </div>

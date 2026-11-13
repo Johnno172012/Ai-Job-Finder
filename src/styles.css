@@ -329,3 +329,5 @@
   .job-result { grid-template-columns: minmax(0, 1fr) auto; }
   .job-result .job-identity { grid-column: 1 / -1; }
 }
+
+.platform-logo { width: 30px; height: 30px; object-fit: contain; border-radius: 5px; flex-shrink: 0; }
