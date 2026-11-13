@@ -53,7 +53,7 @@ function Landing({ ready }) {
   return <div className="landing">
     <header className="landing-nav">
       <a className="brand" href="#"><span className="brand-symbol"><BriefcaseBusiness size={19}/></span>JobBuddy AI</a>
-      <a className="feature-button" href={ready ? '#jobs' : '#resume'}>{ready ? 'Open workspace' : 'Get started'} <ArrowUpRight size={16}/></a>
+      <div className="feature-actions"><a className="feature-button secondary" href="#signin">Sign in</a><a className="feature-button" href={ready ? '#jobs' : '#resume'}>{ready ? 'Open workspace' : 'Get started'} <ArrowUpRight size={16}/></a></div>
     </header>
     <main className="landing-main">
       <h1>Your job search, in one place.</h1>

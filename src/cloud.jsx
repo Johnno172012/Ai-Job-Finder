@@ -10,14 +10,30 @@ export function AccountGate({ children }) {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [register, setRegister] = useState(false);
+  const [route, setRoute] = useState(() => location.hash);
+  useEffect(() => {
+    const update = () => setRoute(location.hash);
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
   useEffect(() => {
     if (!cloud) return;
     const { data: { subscription } } = cloud.auth.onAuthStateChange((_, next) => setSession(next));
     return () => subscription.unsubscribe();
   }, []);
-  if (!cloud) return children(null);
+  if (!cloud) {
+    if (route !== '#signin') return children(null);
+    return <div className="onboarding-shell"><main>
+      <section className="feature-panel">
+        <h1>Sign in to JobBuddy AI</h1>
+        <p>Google and email sign-in require a configured Supabase project.</p>
+        <a className="feature-button secondary" href="#resume">Continue with local workspace</a>
+      </section>
+    </main></div>;
+  }
   if (session === undefined) return <main>Checking your session…</main>;
   if (session) return children(session.user.id);
+  if (!route || route === '#') return children(null);
 
   async function authenticate(action) {
     setBusy(true);

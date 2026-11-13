@@ -147,6 +147,8 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   const [useAI, setUseAI] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const searchTerms = [profile.role, profile.location, profile.skills?.split(/[,\n]/).slice(0, 3).join(' ')]
+    .filter(Boolean).join(' ').slice(0, 120);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const skillWords = keywords([resume.text, profile.skills, profile.role].filter(Boolean).join(' '));
@@ -206,17 +208,18 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     setLoadingJobs(true);
     setError('');
     const sources = platforms;
-    const results = await Promise.allSettled(sources.map(source => fetchJobs(source, [profile.role, profile.location, profile.skills?.split(/[,\n]/).slice(0, 3).join(' ')].filter(Boolean).join(' ').slice(0, 120))));
-    setSourceStatus(Object.fromEntries(sources.map((source, index) => {
+    const results = await Promise.allSettled(sources.map(source => fetchJobs(source, searchTerms)));
+    const statuses = Object.fromEntries(sources.map((source, index) => {
       const result = results[index];
       return [source, result.status === 'fulfilled' ? `${result.value.length} listings` : result.reason.message];
-    })));
+    }));
+    setSourceStatus(statuses);
     const refreshed = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
     const failed = new Set(sources.filter((_, index) => results[index].status === 'rejected'));
     const jobs = [...remoteJobs.filter(job => failed.has(job.source)), ...refreshed];
     setRemoteJobs(jobs);
     if (refreshed.length) {
-      try { await saveCache({ jobs, fetchedAt: Date.now() }); }
+      try { await saveCache({ jobs, statuses, terms: searchTerms, fetchedAt: Date.now() }); }
       catch { setError('Jobs loaded, but the cache could not be saved.'); }
     }
     setJobPage(0);
@@ -224,8 +227,14 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   }
 
   useEffect(() => {
-    if (page === 'jobs' && !Object.keys(sourceStatus).length && !loadingJobs && Date.now() - (cache.fetchedAt ?? 0) >= 21600000) discover();
-  }, [page, sourceStatus, loadingJobs]);
+    if (page !== 'jobs' || loadingJobs) return;
+    const cacheIsFresh = cache.terms === searchTerms && Date.now() - cache.fetchedAt < 21600000;
+    if (cacheIsFresh) {
+      setSourceStatus(cache.statuses ?? {});
+    } else {
+      discover();
+    }
+  }, [page, searchTerms]);
 
   function track(job, status) {
     attempt(async () => {
@@ -339,6 +348,9 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     const currentPage = Math.min(jobPage, lastPage);
     content = <div className="jobs-dashboard">
       <div className="jobs-results">
+      <Panel title={profile.name?.trim() ? `Welcome, ${profile.name.trim().split(/\s+/)[0]}` : 'Welcome to Jobs'}>
+        <p>{matches.length ? `Showing ${currentPage * pageSize + 1}–${Math.min(matches.length, (currentPage + 1) * pageSize)} of ${matches.length} matching listings.` : 'Browse live listings and save roles you want to apply for.'}</p>
+      </Panel>
       <Panel title="Top job matches">
         <p>{skillWords.size ? 'Listings are ranked by shared words from your resume and profile.' : <>Add a <a href="#resume">resume</a> or <a href="#profile">career profile</a> to rank listings by keyword overlap.</>}</p>
         <h3>Job platforms</h3>
