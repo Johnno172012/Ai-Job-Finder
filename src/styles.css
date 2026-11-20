@@ -331,3 +331,21 @@
 }
 
 .platform-logo { width: 30px; height: 30px; object-fit: contain; border-radius: 5px; flex-shrink: 0; }
+
+.apply-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid #7954aa;
+  border-radius: 16px;
+  color: #eee9ff;
+  background: #21172f;
+}
+.apply-dialog::backdrop { background: #080510b0; backdrop-filter: blur(5px); }
+.apply-dialog h2 { margin-top: 0; }
+.apply-dialog p { color: #c9badc; line-height: 1.6; }
+.application-warning { padding: 14px; margin-block: 14px; border: 1px solid #a18050; border-radius: 8px; }
+.application-warning a { text-decoration: underline; }
+.application-status { text-align: center; color: #9ce4c5; }
+.resume-details { display: grid; gap: 8px; padding-block: 14px; overflow-wrap: anywhere; }

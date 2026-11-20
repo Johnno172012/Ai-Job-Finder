@@ -60,6 +60,6 @@ export default async function resumeProfile(req, res) {
     return reply(200, Object.fromEntries(fields.filter(field => typeof profile[field] === 'string')
       .map(field => [field, profile[field].trim().slice(0, 8000)])));
   } catch {
-    return reply(502, { error: 'AI parsing is unavailable. You can still import your resume using local parsing.' });
+    return reply(502, { error: 'AI parsing is unavailable. Please retry your resume upload.' });
   }
 }

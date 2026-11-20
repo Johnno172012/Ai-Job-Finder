@@ -1,3 +1,4 @@
+import { ApplyDialog } from './apply-dialog.jsx';
 import { createJobMatcher } from './job-match.js';
 import { cloud } from './cloud.jsx';
 import React, { Fragment, useEffect, useState } from 'react';
@@ -58,20 +59,32 @@ const platforms = ['Greenhouse', 'Lever', 'Workable', 'Wellfound'];
 
 async function fetchJobs(source, terms) {
   async function get(url) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const headers = {};
+    if (url.startsWith('/api/') && cloud) {
+      const { data } = await cloud.auth.getSession();
+      if (data.session) headers.Authorization = 'Bearer ' + data.session.access_token;
+    }
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
     if (response.status === 503 && url.startsWith('/api/')) throw Error('Requires Brave Search setup');
     if (!response.ok) throw Error('Unavailable');
     return response.json();
   }
 
   let jobs;
+  try {
+    jobs = await get(`/api/job-search?source=${source}&terms=${encodeURIComponent(terms)}`);
+    if (!Array.isArray(jobs)) throw Error('Invalid search response');
+    return jobs.filter(job => safeUrl(job.url)).map(job => ({ ...job, source }));
+  } catch (error) {
+    if (!['Greenhouse', 'Lever'].includes(source)) throw error;
+  }
   if (source === 'Greenhouse') {
     const boards = [['cloudflare', 'Cloudflare'], ['figma', 'Figma'], ['stripe', 'Stripe']];
     const results = await Promise.allSettled(boards.map(async ([board, company]) => {
       const data = await get(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`);
       return data.jobs.map(job => ({
         id: `greenhouse-${board}-${job.id}`, title: job.title, company: job.company_name || company,
-        location: job.location?.name ?? '', url: job.absolute_url,
+        location: job.location?.name ?? '', url: job.absolute_url, updatedAt: job.updated_at,
         description: (job.content ?? '').replace(/&lt;[\s\S]*?&gt;|<[^>]*>/g, ' '),
       }));
     }));
@@ -81,7 +94,7 @@ async function fetchJobs(source, terms) {
     const data = await get('https://api.lever.co/v0/postings/spotify?mode=json');
     jobs = data.map(job => ({
       id: `lever-spotify-${job.id}`, title: job.text, company: 'Spotify',
-      location: job.categories?.location ?? '', url: job.hostedUrl,
+      location: job.categories?.location ?? '', url: job.hostedUrl, postedAt: job.createdAt ? new Date(job.createdAt).toISOString() : '', workplace: job.workplaceType ?? '',
       description: job.descriptionPlain ?? '',
     }));
   } else {
@@ -162,6 +175,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   const [profileTab, setProfileTab] = useState('personal');
   const [cache, saveCache] = useStored('jobbuddy-jobs', {}, account);
   const [remoteJobs, setRemoteJobs] = useState(() => cache.jobs ?? []);
+  const [applyingJob, setApplyingJob] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const searchTerms = [profile.role, profile.location, profile.skills?.split(/[,\n]/).slice(0, 3).join(' ')]
@@ -210,7 +224,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       }
       try {
         await fillProfileFromResume(text);
-        await saveResume({ name: file.name, text: text.slice(0, 100000), path });
+        await saveResume({ name: file.name, text: text.slice(0, 100000), path, size: file.size, type: file.type, uploadedAt: new Date().toISOString() });
       } catch (error) {
         if (path) await cloud.storage.from('resume').remove([path]);
         throw error;
@@ -260,10 +274,33 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
   function track(job, status, bookmarked = isBookmarked(job)) {
     attempt(async () => {
       const next = { ...applications };
-      if (status) next[job.id] = { ...job, status, bookmarked };
+      if (status) next[job.id] = { ...job, status, bookmarked, updatedAt: new Date().toISOString() };
       else delete next[job.id];
       await saveApplications(next);
     }, status ? 'Application updated.' : 'Removed from tracker.');
+  }
+
+  async function downloadResume() {
+    if (!resume.path) throw Error('Upload your resume again to make the original file available.');
+    const { data, error } = await cloud.storage.from('resume').download(resume.path);
+    if (error) throw error;
+    const url = URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = resume.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function toggleBookmark(job) {
+    const current = applications[job.id] ?? job;
+    const saved = isBookmarked(current);
+    attempt(async () => {
+      const next = { ...applications };
+      if (saved && current.status === 'Saved') delete next[job.id];
+      else next[job.id] = { ...current, status: current.status ?? 'Saved', bookmarked: !saved, updatedAt: new Date().toISOString() };
+      await saveApplications(next);
+    }, saved ? 'Job removed from Saved Jobs.' : 'Job saved.');
   }
 
   const profileChecks = [
@@ -289,6 +326,12 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         ? 'Upload your resume to unlock Jobs, Saved Jobs, Profile, and Application Status. Your resume is saved to your workspace.'
         : 'Import a replacement or edit your saved resume text below. Your resume is saved to your workspace.'}</p>
       {account && <p>Uploading a resume sends up to 10,000 characters of its text to Google Gemini to extract your profile details.</p>}
+      {!locked && resume.name && <article className="resume-details">
+        <strong>{resume.name}</strong>
+        <span>{resume.name.split('.').pop().toUpperCase()}{resume.size ? ' · ' + Math.ceil(resume.size / 1024) + ' KB' : ''}</span>
+        {resume.uploadedAt && <span>Uploaded {new Date(resume.uploadedAt).toLocaleString()}</span>}
+        {resume.path && <button className="feature-button secondary" onClick={() => attempt(downloadResume, 'Resume downloaded.')}>Download original</button>}
+      </article>}
       <div className="resume-drop" onDragOver={event => event.preventDefault()} onDrop={event => {
         event.preventDefault();
         upload(event.dataTransfer.files[0]);
@@ -350,7 +393,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
           <select aria-label={'Status for ' + job.title} value={job.status} onChange={event => track(job, event.target.value)}>
             {statuses.map(status => <option key={status}>{status}</option>)}
           </select>
-          <a className="feature-button secondary" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Open <ExternalLink size={14}/></a>
+          <button className="feature-button secondary" onClick={() => setApplyingJob(job)}>Apply now</button>
           <button className="feature-button secondary" aria-label={'Remove ' + job.title} onClick={() => track(job, page === 'saved' && job.status !== 'Saved' ? job.status : '', false)}><Trash2 size={15}/></button>
         </div>
       </article>)}
@@ -403,7 +446,9 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
         </div>
         {!matches.length && <p>{listings.length ? 'No listings match your filter.' : loadingJobs ? 'Loading live jobs…' : 'No listings loaded. Refresh to try again.'}</p>}
         {visibleJobs.map(({ job, match }) => <article className="job-row job-result" key={job.id}>
-          <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location].filter(Boolean).join(' · ')}</p></div></div>
+          <div className="job-identity"><CompanyLogo company={job.company}/><div><h3>{job.title}</h3><small>{job.source}</small><p>{[job.company, job.location, job.workplace].filter(Boolean).join(' · ')}</p>
+            {(job.postedAt || job.updatedAt) && <small>{job.postedAt ? 'Posted' : 'Updated'} {new Date(job.postedAt || job.updatedAt).toLocaleDateString()}</small>}
+            </div></div>
           <div className="job-match">
             {match.score === null ? <small>Not enough skill details</small> : <>
               <strong>{match.score}% skill match</strong>
@@ -412,8 +457,10 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
               {match.matched.length > 0 && <small>{match.matched.slice(0, 3).join(' · ')}</small>}
             </>}
           </div>
-          <div className="feature-actions job-result-actions"><a className="feature-button" href={safeUrl(job.url)} target="_blank" rel="noreferrer">Apply now <ExternalLink size={14}/></a>
-            {isBookmarked(applications[job.id]) ? <a className="feature-button secondary" href="#saved">Saved</a> : <button className="feature-button secondary" onClick={() => track(job, applications[job.id]?.status ?? 'Saved', true)}><Bookmark size={15}/> Save</button>}</div>
+          <div className="feature-actions job-result-actions">
+            {applications[job.id]?.status && applications[job.id].status !== 'Saved' && <a className="application-status" href="#applications">{applications[job.id].status}</a>}
+            <button className="feature-button" onClick={() => setApplyingJob(job)}>Apply now <ExternalLink size={14}/></button>
+            <button className="feature-button secondary" aria-pressed={isBookmarked(applications[job.id])} onClick={() => toggleBookmark(job)}><Bookmark size={15}/>{isBookmarked(applications[job.id]) ? 'Saved' : 'Save'}</button></div>
         </article>)}
         {lastPage > 0 && <div className="feature-actions job-row" aria-label="Job results pages">
           <button className="feature-button secondary" disabled={currentPage === 0} onClick={() => setJobPage(currentPage - 1)}>Previous</button>
@@ -425,7 +472,7 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
       <aside className="jobs-overview" aria-label="Workspace overview">
         {profileCompleteness}
         <Panel title="Recent activity">
-          {Object.values(applications).slice(-4).reverse().map(job => <p key={job.id}><strong>{job.title}</strong><br/>{job.status} · {job.company}</p>)}
+          {Object.values(applications).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')).slice(0, 4).map(job => <p key={job.id}><strong>{job.title}</strong><br/>{job.status} · {job.company}{job.updatedAt && <><br/><small>{new Date(job.updatedAt).toLocaleString()}</small></>}</p>)}
           {!Object.keys(applications).length && <p>Saved jobs and applications will appear here.</p>}
           <a className="feature-button secondary" href="#applications">View applications</a>
         </Panel>
@@ -436,5 +483,14 @@ export function Workspace({ page, resume, saveResume, locked, account }) {
     <div role="status">{message}</div>
     {error && <p className="feature-error" role="alert">{error}</p>}
     <Fragment key={page}>{content}</Fragment>
+    {applyingJob && <ApplyDialog key={applyingJob.id} job={applyingJob} profile={profile} application={applications[applyingJob.id]}
+      onClose={() => setApplyingJob(null)} onSave={async () => {
+        const previous = applications[applyingJob.id];
+        await saveApplications({ ...applications, [applyingJob.id]: {
+          ...applyingJob, ...previous, status: 'Applied', bookmarked: isBookmarked(previous),
+          appliedAt: previous?.appliedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(),
+        } });
+        setMessage('Application marked as applied.');
+      }}/>}
   </div>;
 }
